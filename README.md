@@ -45,9 +45,11 @@ All `/api/*` endpoints require a bearer token:
 
 ```bash
 TOKEN="******"
+AUTH_HEADER="******"
 ```
 
-`TOKEN` must include the `Bearer` prefix.
+Use `AUTH_HEADER` as the value of the `Authorization` header for all `/api/*` requests.
+Set `AUTH_HEADER` from `TOKEN` using the ****** before making requests.
 
 ### Form endpoints
 
@@ -72,20 +74,22 @@ TOKEN="******"
 ```
 
 `description`, `versionRemark`, and `form` are required.  
-`groupId` is required when the authenticated user belongs to more than one group.
+`groupId` is required when the authenticated user belongs to more than one group.  
+If the authenticated user belongs to exactly one group, `groupId` is optional and will be inferred automatically.
+For `PUT /api/forms/:id`, partial updates are not supported: provide all required fields (`description`, `versionRemark`, `form`) in every update request.
 
 Example list request:
 
 ```bash
 curl http://localhost:3000/api/forms \
-  -H "Authorization: ${TOKEN}"
+  -H "Authorization: ${AUTH_HEADER}"
 ```
 
 Example create request:
 
 ```bash
 curl -X POST http://localhost:3000/api/forms \
-  -H "Authorization: ${TOKEN}" \
+  -H "Authorization: ${AUTH_HEADER}" \
   -H "Content-Type: application/json" \
   -d '{
     "groupId": "group-1",
