@@ -43,6 +43,27 @@ function appendCookies(res, cookies) {
   res.setHeader('Set-Cookie', [...current, ...cookies]);
 }
 
+function normalizeBasePath(basePath = '') {
+  const trimmed = String(basePath).trim();
+  if (!trimmed || trimmed === '/') return '';
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
+}
+
+function getCallbackBasePath(callbackUrl) {
+  try {
+    const callbackPath = new URL(callbackUrl).pathname.replace(/\/+$/, '');
+    if (!callbackPath || callbackPath === '/auth/callback') {
+      return '';
+    }
+    if (callbackPath.endsWith('/auth/callback')) {
+      return normalizeBasePath(callbackPath.slice(0, -'/auth/callback'.length));
+    }
+    return normalizeBasePath(callbackPath);
+  } catch (_error) {
+    return '';
+  }
+}
+
 function isSecureRequest(req) {
   if (req.secure) return true;
   return String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
@@ -198,6 +219,7 @@ function createPocketIdAuth(config) {
     apiUrl: config.pocketIdApiUrl
   });
   const sessions = new SessionStore();
+  const callbackBasePath = getCallbackBasePath(config.pocketIdCallbackUrl);
 
   function getCookieOptions(req) {
     return {
@@ -212,6 +234,14 @@ function createPocketIdAuth(config) {
     const cookies = parseCookies(req.headers.cookie || '');
     const session = sessions.get(cookies[SESSION_COOKIE]);
     return session ? session.user : null;
+  }
+
+  function getBasePath(req) {
+    return normalizeBasePath(req.headers['x-forwarded-prefix']) || callbackBasePath;
+  }
+
+  function toAppPath(req, pathname) {
+    return `${getBasePath(req)}${pathname}`;
   }
 
   async function login(req, res) {
@@ -259,7 +289,7 @@ function createPocketIdAuth(config) {
       })
     ]);
 
-    return res.redirect('/');
+    return res.redirect(toAppPath(req, '/'));
   }
 
   async function logout(req, res) {
@@ -277,7 +307,7 @@ function createPocketIdAuth(config) {
     const user = getSessionUser(req);
     if (!user) {
       if (req.method === 'GET') {
-        return res.redirect('/auth/login');
+        return res.redirect(toAppPath(req, '/auth/login'));
       }
       return res.status(401).json({ message: 'Authentication required' });
     }
@@ -289,7 +319,8 @@ function createPocketIdAuth(config) {
     login,
     callback,
     logout,
-    requireAuth
+    requireAuth,
+    getBasePath
   };
 }
 

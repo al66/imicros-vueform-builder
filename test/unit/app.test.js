@@ -14,6 +14,7 @@ function buildRepositoryMock() {
 describe('form service unit tests', () => {
   function buildAuthMock(user = { userId: 'u1', groups: ['g1'] }) {
     return {
+      getBasePath: jest.fn(() => ''),
       requireAuth: (req, _res, next) => {
         req.user = user;
         next();
@@ -27,6 +28,7 @@ describe('form service unit tests', () => {
   test('redirects unauthenticated root requests to login', async () => {
     const repository = buildRepositoryMock();
     const auth = {
+      getBasePath: jest.fn(() => ''),
       requireAuth: (_req, res, _next) => res.redirect('/auth/login'),
       login: jest.fn(async (_req, res) => res.redirect('https://pocket-id.local/auth')),
       callback: jest.fn(async (_req, res) => res.redirect('/')),
@@ -88,6 +90,20 @@ describe('form service unit tests', () => {
     expect(response.status).toBe(200);
     expect(response.body.forms).toEqual([{ id: 'f1', groupId: 'g1', version: 1 }]);
     expect(repository.listByGroups).toHaveBeenCalledWith(['g1']);
+  });
+
+  test('returns the authenticated user groups', async () => {
+    const repository = buildRepositoryMock();
+    const auth = buildAuthMock({ userId: 'u1', groups: ['g1', 'g2'] });
+    const app = createApp({
+      repository,
+      auth
+    });
+
+    const response = await request(app).get('/api/groups');
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toEqual(['g1', 'g2']);
   });
 
   test('creates a form with automatic single group selection', async () => {
@@ -167,6 +183,7 @@ describe('form service unit tests', () => {
   test('returns the root UI page', async () => {
     const repository = buildRepositoryMock();
     const auth = buildAuthMock({ userId: 'u1', groups: ['g1'] });
+    auth.getBasePath.mockReturnValue('/vueform-builder');
     const app = createApp({
       repository,
       auth
@@ -176,6 +193,7 @@ describe('form service unit tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toContain('Available forms');
+    expect(response.text).toContain('window.__APP_BASE_PATH__ = "/vueform-builder";');
   });
 
   test('deletes a form in an authorized group', async () => {

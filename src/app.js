@@ -15,6 +15,13 @@ function resolveGroup(groupId, groups) {
   return groups.includes(groupId) ? groupId : null;
 }
 
+function renderIndexHtml(indexHtml, basePath) {
+  return indexHtml.replace(
+    "window.__APP_BASE_PATH__ = '';",
+    `window.__APP_BASE_PATH__ = ${JSON.stringify(basePath || '')};`
+  );
+}
+
 function createApp({ auth, repository }) {
   const app = express();
   const routeRateLimiter = rateLimit({
@@ -66,10 +73,13 @@ function createApp({ auth, repository }) {
     if (!indexHtml) {
       return next(new Error(`UI file not found: ${indexPath}`));
     }
-    return res.type('html').send(indexHtml);
+    const basePath = typeof auth.getBasePath === 'function' ? auth.getBasePath(_req) : '';
+    return res.type('html').send(renderIndexHtml(indexHtml, basePath));
   });
 
   app.use('/api', routeRateLimiter, auth.requireAuth);
+
+  app.get('/api/groups', async (req, res) => res.json({ groups: req.user.groups || [] }));
 
   app.get('/api/forms', async (req, res, next) => {
     try {
