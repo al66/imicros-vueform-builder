@@ -69,11 +69,11 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.get('/', routeRateLimiter, auth.requireAuth, (_req, res, next) => {
+  app.get('/', routeRateLimiter, auth.requireAuth, (req, res, next) => {
     if (!indexHtml) {
       return next(new Error(`UI file not found: ${indexPath}`));
     }
-    const basePath = typeof auth.getBasePath === 'function' ? auth.getBasePath(_req) : '';
+    const basePath = typeof auth.getBasePath === 'function' ? auth.getBasePath(req) : '';
     return res.type('html').send(renderIndexHtml(indexHtml, basePath));
   });
 
