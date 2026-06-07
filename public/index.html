@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vueform Builder</title>
+    <title>VueForm builder</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vueform/vueform@latest/themes/default.css" />
     <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
     <style>
@@ -26,6 +26,10 @@
       .empty { padding: 1rem; text-align: center; color: #6b7280; }
       .field { margin-bottom: .8rem; }
       .field label { display: block; margin-bottom: .3rem; font-weight: 600; }
+      .overlay { position: fixed; inset: 0; background: rgba(17, 24, 39, .45); display: flex; align-items: center; justify-content: center; }
+      .modal { background: #fff; width: min(460px, calc(100vw - 2rem)); border-radius: 10px; padding: 1rem; }
+      .modal h3 { margin: 0 0 .7rem; }
+      .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
     </style>
   </head>
   <body>
@@ -46,7 +50,10 @@
             description: '',
             groupId: '',
             editorVersion: 1,
-            formJson: '{\n  "name": "new-form",\n  "elements": []\n}'
+            formJson: '{\n  "name": "new-form",\n  "elements": []\n}',
+            showVersionRemarkDialog: false,
+            versionRemark: '',
+            pendingPayload: null
           };
         },
         methods: {
@@ -69,8 +76,8 @@
               }
             });
             if (!response.ok) {
-              const payload = await response.json().catch(() => ({}));
-              throw new Error(payload.message || `Request failed (${response.status})`);
+              const payload = await response.json().catch(() => null);
+              throw new Error(payload?.message || `Request failed (${response.status}): response body could not be parsed`);
             }
             if (response.status === 204) {
               return null;
@@ -105,7 +112,8 @@
             this.editingId = form.id;
             this.description = form.description || '';
             this.groupId = form.groupId || '';
-            this.editorVersion = Number(form.version || 0) + 1;
+            const currentVersion = Number(form.version ?? 0);
+            this.editorVersion = currentVersion + 1;
             this.formJson = JSON.stringify(form.form || {}, null, 2);
             this.view = 'builder';
             this.setError('');
@@ -124,28 +132,39 @@
               this.setError('Form JSON is invalid.');
               return;
             }
-            const versionRemark = window.prompt('Enter version remark');
-            if (versionRemark === null) {
-              return;
+            const payload = {
+              description: this.description,
+              form
+            };
+            if (this.editorMode === 'create' && this.groupId.trim()) {
+              payload.groupId = this.groupId.trim();
             }
-            if (!versionRemark.trim()) {
+            this.pendingPayload = payload;
+            this.versionRemark = '';
+            this.showVersionRemarkDialog = true;
+          },
+          closeVersionRemarkDialog() {
+            this.showVersionRemarkDialog = false;
+            this.versionRemark = '';
+            this.pendingPayload = null;
+          },
+          async confirmVersionRemark() {
+            if (!this.versionRemark.trim()) {
               this.setError('Version remark is required.');
               return;
             }
+            this.setError('');
             try {
               const payload = {
-                description: this.description,
-                versionRemark,
-                form
+                ...this.pendingPayload,
+                versionRemark: this.versionRemark.trim()
               };
-              if (this.editorMode === 'create' && this.groupId.trim()) {
-                payload.groupId = this.groupId.trim();
-              }
               if (this.editorMode === 'create') {
                 await this.request('/api/forms', { method: 'POST', body: JSON.stringify(payload) });
               } else {
                 await this.request(`/api/forms/${this.editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
               }
+              this.closeVersionRemarkDialog();
               this.view = 'list';
               await this.loadForms();
             } catch (error) {
@@ -177,7 +196,8 @@
               <button @click="openCreate">Create new form</button>
             </div>
             <div class="token-row">
-              <input v-model="token" type="password" placeholder="******" />
+              <label class="sr-only" for="auth-token">Auth token</label>
+              <input id="auth-token" v-model="token" type="password" placeholder="Auth token" />
               <button class="secondary" @click="loadForms">Load forms</button>
             </div>
             <p class="meta" v-if="message">{{ message }}</p>
@@ -211,26 +231,39 @@
           </div>
           <div class="card" v-else>
             <div class="header">
-              <h2>Vueform builder</h2>
+              <h2>VueForm builder</h2>
               <div class="meta">New version: {{ editorVersion }}</div>
             </div>
             <div class="field">
-              <label>Description</label>
-              <input v-model="description" placeholder="Form description" />
+              <label for="form-description">Description</label>
+              <input id="form-description" v-model="description" placeholder="Form description" />
             </div>
             <div class="field" v-if="editorMode === 'create'">
-              <label>Group ID (required if you have multiple groups)</label>
-              <input v-model="groupId" placeholder="Group id" />
+              <label for="group-id">Group ID (required if you have multiple groups)</label>
+              <input id="group-id" v-model="groupId" placeholder="Group id" />
             </div>
             <div class="field">
-              <label>Form JSON</label>
-              <textarea v-model="formJson"></textarea>
+              <label for="form-json">Form JSON</label>
+              <textarea id="form-json" v-model="formJson"></textarea>
             </div>
             <div class="actions">
               <button @click="saveForm">Save</button>
               <button class="secondary" @click="cancelEdit">Cancel</button>
             </div>
             <div class="error" v-if="error">{{ error }}</div>
+            <div class="overlay" v-if="showVersionRemarkDialog">
+              <div class="modal">
+                <h3>Version remark</h3>
+                <div class="field">
+                  <label for="version-remark">Remark</label>
+                  <input id="version-remark" v-model="versionRemark" placeholder="Describe this version" />
+                </div>
+                <div class="actions">
+                  <button @click="confirmVersionRemark">Save version</button>
+                  <button class="secondary" @click="closeVersionRemarkDialog">Cancel</button>
+                </div>
+              </div>
+            </div>
           </div>
         `
       }).mount('#app');
