@@ -1,5 +1,7 @@
 # imicros-vueform-builder
 
+> **⚠️ Important:** This service uses the [Vueform Builder](https://builder.vueform.com/pricing), which requires **at least a White label licence**. Please ensure you have the appropriate licence before using this service.
+
 Service for creating and versioning Vueform forms with Pocket ID auth.
 
 The base route (`/`) serves a Vue.js UI for listing, creating, editing and deleting forms.
