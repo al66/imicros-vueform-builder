@@ -154,6 +154,15 @@ class FormsRepository {
     } finally {
       client.release();
     }
+
+    async remove({ formId, groups }) {
+      const result = await this.pool.query(
+        'DELETE FROM forms WHERE id = $1 AND group_id = ANY($2::text[]) RETURNING id',
+        [formId, groups]
+      );
+
+      return result.rows.length > 0;
+    }
   }
 }
 

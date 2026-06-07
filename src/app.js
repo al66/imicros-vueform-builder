@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
 function resolveGroup(groupId, groups) {
   if (groups.length === 1) {
@@ -15,9 +17,19 @@ function resolveGroup(groupId, groups) {
 function createApp({ getUserContext, repository }) {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
+  const indexPath = path.resolve(__dirname, '../public/index.html');
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  app.get('/', (_req, res, next) => {
+    fs.readFile(indexPath, 'utf8', (error, html) => {
+      if (error) {
+        return next(error);
+      }
+      res.type('html').send(html);
+    });
   });
 
   app.use('/api', async (req, res, next) => {
@@ -123,6 +135,28 @@ function createApp({ getUserContext, repository }) {
         versionRemark,
         form,
         userId
+      });
+
+      app.delete('/api/forms/:id', async (req, res, next) => {
+        try {
+          const { groups } = req.user;
+          if (groups.length === 0) {
+            return res.status(403).json({ message: 'No group access' });
+          }
+
+          const removed = await repository.remove({
+            formId: req.params.id,
+            groups
+          });
+
+          if (!removed) {
+            return res.status(404).json({ message: 'Form not found' });
+          }
+
+          return res.status(204).send();
+        } catch (error) {
+          return next(error);
+        }
       });
 
       if (!updated) {
