@@ -75,4 +75,31 @@ suite('integration with PostgreSQL', () => {
     expect(list.body.forms[0].version).toBe(2);
     expect(list.body.forms[0].description).toBe('Form A updated');
   });
+
+  test('deletes a form', async () => {
+    const createA = await request(app)
+      .post('/api/forms')
+      .set('Authorization', ['Bearer', 'test-token'].join(' '))
+      .send({
+        groupId: 'group-a',
+        description: 'Form A',
+        versionRemark: 'initial version',
+        form: { title: 'A' }
+      });
+
+    expect(createA.status).toBe(201);
+
+    const response = await request(app)
+      .delete(`/api/forms/${createA.body.form.id}`)
+      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+
+    expect(response.status).toBe(204);
+
+    const list = await request(app)
+      .get('/api/forms')
+      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+
+    expect(list.status).toBe(200);
+    expect(list.body.forms).toHaveLength(0);
+  });
 });

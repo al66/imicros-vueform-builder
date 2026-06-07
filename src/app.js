@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
 function resolveGroup(groupId, groups) {
   if (groups.length === 1) {
@@ -15,9 +17,25 @@ function resolveGroup(groupId, groups) {
 function createApp({ getUserContext, repository }) {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
+  const indexPath = path.resolve(__dirname, '../public/index.html');
+  let indexHtml = null;
+  try {
+    indexHtml = fs.readFileSync(indexPath, 'utf8');
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(error);
+    indexHtml = null;
+  }
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  app.get('/', (_req, res, next) => {
+    if (!indexHtml) {
+      return next(new Error(`UI file not found: ${indexPath}`));
+    }
+    return res.type('html').send(indexHtml);
   });
 
   app.use('/api', async (req, res, next) => {
@@ -130,6 +148,28 @@ function createApp({ getUserContext, repository }) {
       }
 
       return res.json({ form: updated });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete('/api/forms/:id', async (req, res, next) => {
+    try {
+      const { groups } = req.user;
+      if (groups.length === 0) {
+        return res.status(403).json({ message: 'No group access' });
+      }
+
+      const removed = await repository.remove({
+        formId: req.params.id,
+        groups
+      });
+
+      if (!removed) {
+        return res.status(404).json({ message: 'Form not found' });
+      }
+
+      return res.status(204).send();
     } catch (error) {
       return next(error);
     }

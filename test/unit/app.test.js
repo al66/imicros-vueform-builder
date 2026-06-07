@@ -6,7 +6,8 @@ function buildRepositoryMock() {
     listByGroups: jest.fn(),
     getByIdAndGroups: jest.fn(),
     create: jest.fn(),
-    update: jest.fn()
+    update: jest.fn(),
+    remove: jest.fn()
   };
 }
 
@@ -118,5 +119,35 @@ describe('form service unit tests', () => {
       userId: 'u1'
     });
     expect(valid.body.form.version).toBe(2);
+  });
+
+  test('returns the root UI page', async () => {
+    const repository = buildRepositoryMock();
+    const app = createApp({
+      repository,
+      getUserContext: jest.fn().mockResolvedValue({ userId: 'u1', groups: ['g1'] })
+    });
+
+    const response = await request(app).get('/');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('Available forms');
+  });
+
+  test('deletes a form in an authorized group', async () => {
+    const repository = buildRepositoryMock();
+    repository.remove.mockResolvedValue(true);
+
+    const app = createApp({
+      repository,
+      getUserContext: jest.fn().mockResolvedValue({ userId: 'u1', groups: ['g1'] })
+    });
+
+    const response = await request(app)
+      .delete('/api/forms/f1')
+      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+
+    expect(response.status).toBe(204);
+    expect(repository.remove).toHaveBeenCalledWith({ formId: 'f1', groups: ['g1'] });
   });
 });

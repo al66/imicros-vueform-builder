@@ -2,6 +2,8 @@
 
 Service for creating and versioning Vueform forms with Pocket ID auth.
 
+The base route (`/`) serves a Vue.js UI for listing, creating, editing and deleting forms.
+
 ## Required environment variables
 
 - `POCKET_ID_API_URL`
