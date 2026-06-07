@@ -44,8 +44,10 @@ curl http://localhost:3000/health
 All `/api/*` endpoints require a bearer token:
 
 ```bash
--H "Authorization: ******"
+TOKEN="******"
 ```
+
+`TOKEN` must include the `Bearer` prefix.
 
 ### Form endpoints
 
@@ -62,10 +64,10 @@ All `/api/*` endpoints require a bearer token:
 
 ```json
 {
-  "groupId": "optional-if-user-has-single-group",
+  "groupId": "group-123",
   "description": "Form description",
   "versionRemark": "Why this version was created",
-  "form": {}
+  "form": { "type": "object", "properties": {} }
 }
 ```
 
@@ -76,14 +78,14 @@ Example list request:
 
 ```bash
 curl http://localhost:3000/api/forms \
-  -H "Authorization: ******"
+  -H "Authorization: ${TOKEN}"
 ```
 
 Example create request:
 
 ```bash
 curl -X POST http://localhost:3000/api/forms \
-  -H "Authorization: ******" \
+  -H "Authorization: ${TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
     "groupId": "group-1",
