@@ -68,9 +68,14 @@
                 ...(options.headers || {})
               }
             });
-            if (response.redirected && response.url.includes('/auth/login')) {
-              window.location.assign(response.url);
-              return null;
+            if (response.redirected) {
+              const redirectedUrl = new URL(response.url, window.location.origin);
+              const isLoginRedirect = redirectedUrl.origin === window.location.origin
+                && redirectedUrl.pathname === '/auth/login';
+              if (isLoginRedirect) {
+                window.location.assign(redirectedUrl.toString());
+                return null;
+              }
             }
             if (!response.ok) {
               const payload = await response.json().catch(() => null);
@@ -97,10 +102,10 @@
           async logout() {
             try {
               await this.request('/auth/logout', { method: 'POST' });
-            } catch (_error) {
-              // ignore and continue to login redirect
+              window.location.assign('/auth/login');
+            } catch (error) {
+              this.setError(error.message || 'Logout failed.');
             }
-            window.location.assign('/auth/login');
           },
           openCreate() {
             this.editorMode = 'create';

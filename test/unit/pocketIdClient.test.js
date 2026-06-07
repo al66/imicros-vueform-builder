@@ -65,7 +65,9 @@ describe('pocket id oidc auth client', () => {
     expect(res.statusCode).toBe(302);
     expect(res.location).toContain('https://issuer.example.com/oauth/authorize');
     expect(res.location).toContain('response_type=code');
-    expect(res.getHeader('Set-Cookie')[0]).toContain('vf_oidc_state=');
+    const setCookie = res.getHeader('Set-Cookie');
+    expect(Array.isArray(setCookie)).toBe(true);
+    expect(setCookie?.[0]).toContain('vf_oidc_state=');
   });
 
   test('creates a session from callback and authorizes requests', async () => {
@@ -91,7 +93,10 @@ describe('pocket id oidc auth client', () => {
     const loginRes = createResponseMock();
     await auth.login(loginReq, loginRes);
 
-    const stateCookie = loginRes.getHeader('Set-Cookie')[0];
+    const loginCookies = loginRes.getHeader('Set-Cookie');
+    expect(Array.isArray(loginCookies)).toBe(true);
+    const stateCookie = loginCookies?.[0];
+    expect(stateCookie).toContain('vf_oidc_state=');
     const stateValue = stateCookie.split(';')[0].split('=')[1];
 
     const callbackReq = {

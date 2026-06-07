@@ -226,10 +226,7 @@ function createPocketIdAuth(config) {
     }
 
     const user = await oidc.fetchUserInfo(tokens.access_token);
-    const sessionId = sessions.set({
-      ...user,
-      accessToken: tokens.access_token
-    });
+    const sessionId = sessions.set(user);
 
     appendCookies(res, [
       serializeCookie(OIDC_STATE_COOKIE, '', { ...getCookieOptions(req), maxAge: 0 }),

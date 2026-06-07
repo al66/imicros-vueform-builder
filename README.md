@@ -56,6 +56,7 @@ The application uses Pocket ID OIDC Authorization Code Flow:
 
 Users should open the root URL (for example, `https://dev.imicros.de/vueform-builder/`).
 The app restores authenticated state from secure HTTP-only session cookies and does not require manual bearer token input.
+The default session store is in-memory and should be replaced by a shared persistent store for multi-instance production deployments.
 
 After login, the backend retrieves the user profile through:
 

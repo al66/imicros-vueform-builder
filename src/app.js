@@ -14,8 +14,34 @@ function resolveGroup(groupId, groups) {
   return groups.includes(groupId) ? groupId : null;
 }
 
+function createRateLimiter({ windowMs, maxRequests }) {
+  const entries = new Map();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip
+      || req.headers['x-forwarded-for']
+      || req.socket?.remoteAddress
+      || 'unknown';
+    const current = entries.get(key);
+
+    if (!current || current.expiresAt <= now) {
+      entries.set(key, { count: 1, expiresAt: now + windowMs });
+      return next();
+    }
+
+    if (current.count >= maxRequests) {
+      return res.status(429).json({ message: 'Too many requests' });
+    }
+
+    current.count += 1;
+    return next();
+  };
+}
+
 function createApp({ auth, repository }) {
   const app = express();
+  const authRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 120 });
   app.use(express.json({ limit: '2mb' }));
   const indexPath = path.resolve(__dirname, '../public/index.html');
   let indexHtml = null;
@@ -31,7 +57,7 @@ function createApp({ auth, repository }) {
     res.json({ status: 'ok' });
   });
 
-  app.get('/auth/login', async (req, res, next) => {
+  app.get('/auth/login', authRateLimiter, async (req, res, next) => {
     try {
       await auth.login(req, res);
     } catch (error) {
@@ -39,7 +65,7 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.get('/auth/callback', async (req, res, next) => {
+  app.get('/auth/callback', authRateLimiter, async (req, res, next) => {
     try {
       await auth.callback(req, res);
     } catch (error) {
@@ -47,7 +73,7 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.post('/auth/logout', async (req, res, next) => {
+  app.post('/auth/logout', authRateLimiter, async (req, res, next) => {
     try {
       await auth.logout(req, res);
     } catch (error) {
@@ -55,14 +81,14 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.get('/', auth.requireAuth, (_req, res, next) => {
+  app.get('/', authRateLimiter, auth.requireAuth, (_req, res, next) => {
     if (!indexHtml) {
       return next(new Error(`UI file not found: ${indexPath}`));
     }
     return res.type('html').send(indexHtml);
   });
 
-  app.use('/api', auth.requireAuth);
+  app.use('/api', authRateLimiter, auth.requireAuth);
 
   app.get('/api/forms', async (req, res, next) => {
     try {
