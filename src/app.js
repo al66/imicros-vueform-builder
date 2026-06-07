@@ -17,7 +17,7 @@ function resolveGroup(groupId, groups) {
 
 function createApp({ auth, repository }) {
   const app = express();
-  const authRateLimiter = rateLimit({
+  const routeRateLimiter = rateLimit({
     windowMs: 60 * 1000,
     limit: 120,
     standardHeaders: 'draft-8',
@@ -38,7 +38,7 @@ function createApp({ auth, repository }) {
     res.json({ status: 'ok' });
   });
 
-  app.get('/auth/login', authRateLimiter, async (req, res, next) => {
+  app.get('/auth/login', routeRateLimiter, async (req, res, next) => {
     try {
       await auth.login(req, res);
     } catch (error) {
@@ -46,7 +46,7 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.get('/auth/callback', authRateLimiter, async (req, res, next) => {
+  app.get('/auth/callback', routeRateLimiter, async (req, res, next) => {
     try {
       await auth.callback(req, res);
     } catch (error) {
@@ -54,7 +54,7 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.post('/auth/logout', authRateLimiter, async (req, res, next) => {
+  app.post('/auth/logout', routeRateLimiter, async (req, res, next) => {
     try {
       await auth.logout(req, res);
     } catch (error) {
@@ -62,14 +62,14 @@ function createApp({ auth, repository }) {
     }
   });
 
-  app.get('/', authRateLimiter, auth.requireAuth, (_req, res, next) => {
+  app.get('/', routeRateLimiter, auth.requireAuth, (_req, res, next) => {
     if (!indexHtml) {
       return next(new Error(`UI file not found: ${indexPath}`));
     }
     return res.type('html').send(indexHtml);
   });
 
-  app.use('/api', authRateLimiter, auth.requireAuth);
+  app.use('/api', routeRateLimiter, auth.requireAuth);
 
   app.get('/api/forms', async (req, res, next) => {
     try {

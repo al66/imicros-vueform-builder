@@ -70,9 +70,9 @@
             });
             if (response.redirected) {
               const redirectedUrl = new URL(response.url, window.location.origin);
-              const isLoginRedirect = redirectedUrl.origin === window.location.origin
-                && redirectedUrl.pathname === '/auth/login';
-              if (isLoginRedirect) {
+              const isAuthRedirect = redirectedUrl.origin === window.location.origin
+                && redirectedUrl.pathname.startsWith('/auth/');
+              if (isAuthRedirect) {
                 window.location.assign(redirectedUrl.toString());
                 return null;
               }
