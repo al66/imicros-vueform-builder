@@ -48,11 +48,28 @@ class SessionStore {
   constructor(ttlMs = SESSION_TTL_MS) {
     this.ttlMs = ttlMs;
     this.sessions = new Map();
+    this.operationCount = 0;
+  }
+
+  cleanupExpired(now = Date.now()) {
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.expiresAt <= now) {
+        this.sessions.delete(sessionId);
+      }
+    }
+  }
+
+  maybeCleanup(now) {
+    this.operationCount += 1;
+    if (this.operationCount % 100 === 0) {
+      this.cleanupExpired(now);
+    }
   }
 
   set(user) {
     const sessionId = crypto.randomBytes(32).toString('hex');
     const now = Date.now();
+    this.maybeCleanup(now);
     this.sessions.set(sessionId, {
       user,
       createdAt: now,
@@ -63,9 +80,11 @@ class SessionStore {
 
   get(sessionId) {
     if (!sessionId) return null;
+    const now = Date.now();
+    this.maybeCleanup(now);
     const session = this.sessions.get(sessionId);
     if (!session) return null;
-    if (session.expiresAt <= Date.now()) {
+    if (session.expiresAt <= now) {
       this.sessions.delete(sessionId);
       return null;
     }

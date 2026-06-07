@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,34 +15,14 @@ function resolveGroup(groupId, groups) {
   return groups.includes(groupId) ? groupId : null;
 }
 
-function createRateLimiter({ windowMs, maxRequests }) {
-  const entries = new Map();
-
-  return (req, res, next) => {
-    const now = Date.now();
-    const key = req.ip
-      || req.headers['x-forwarded-for']
-      || req.socket?.remoteAddress
-      || 'unknown';
-    const current = entries.get(key);
-
-    if (!current || current.expiresAt <= now) {
-      entries.set(key, { count: 1, expiresAt: now + windowMs });
-      return next();
-    }
-
-    if (current.count >= maxRequests) {
-      return res.status(429).json({ message: 'Too many requests' });
-    }
-
-    current.count += 1;
-    return next();
-  };
-}
-
 function createApp({ auth, repository }) {
   const app = express();
-  const authRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxRequests: 120 });
+  const authRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false
+  });
   app.use(express.json({ limit: '2mb' }));
   const indexPath = path.resolve(__dirname, '../public/index.html');
   let indexHtml = null;
