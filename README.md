@@ -8,9 +8,12 @@ The base route (`/`) serves a Vue.js UI for listing, creating, editing and delet
 
 ## Required environment variables
 
+- `POCKET_ID_ISSUER_URL`
+- `POCKET_ID_CLIENT_ID`
+- `POCKET_ID_CLIENT_SECRET`
+- `POCKET_ID_CALLBACK_URL`
 - `POCKET_ID_API_URL`
 - `DATABASE_URL`
-- `POCKET_ID_API_TOKEN` (optional)
 - `PORT` (optional, defaults to `3000`)
 
 ## Run
@@ -43,17 +46,23 @@ Example:
 curl http://localhost:3000/health
 ```
 
-### API authentication
+### Authentication flow
 
-All `/api/*` endpoints require a bearer token:
+The application uses Pocket ID OIDC Authorization Code Flow:
 
-```bash
-TOKEN="******"
-AUTH_HEADER="******"
-```
+- `GET /auth/login` starts OIDC login and redirects to Pocket ID.
+- `GET /auth/callback` handles the authorization code callback.
+- `POST /auth/logout` clears the application session.
 
-Use `AUTH_HEADER` as the value of the `Authorization` header for all `/api/*` requests.
-Set `AUTH_HEADER` from `TOKEN` using the ****** before making requests.
+Users should open the root URL (for example, `https://dev.imicros.de/vueform-builder/`).
+The app restores authenticated state from secure HTTP-only session cookies and does not require manual bearer token input.
+The default session store is in-memory and should be replaced by a shared persistent store for multi-instance production deployments.
+
+After login, the backend retrieves the user profile through:
+
+`GET {POCKET_ID_API_URL}/api/oidc/userinfo`
+
+using the access token obtained from the token endpoint.
 
 ### Form endpoints
 
@@ -85,15 +94,14 @@ For `PUT /api/forms/:id`, partial updates are not supported: provide all require
 Example list request:
 
 ```bash
-curl http://localhost:3000/api/forms \
-  -H "Authorization: ${AUTH_HEADER}"
+curl -b cookies.txt -c cookies.txt http://localhost:3000/api/forms
 ```
 
 Example create request:
 
 ```bash
 curl -X POST http://localhost:3000/api/forms \
-  -H "Authorization: ${AUTH_HEADER}" \
+  -b cookies.txt -c cookies.txt \
   -H "Content-Type: application/json" \
   -d '{
     "groupId": "group-1",

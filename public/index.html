@@ -11,8 +11,6 @@
       .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
       .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, .08); padding: 1rem; }
       .header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-      .token-row { display: flex; gap: .5rem; margin-bottom: 1rem; }
-      .token-row input { flex: 1; }
       table { width: 100%; border-collapse: collapse; }
       th, td { text-align: left; border-bottom: 1px solid #e5e7eb; padding: .6rem; }
       .actions { display: flex; gap: .4rem; }
@@ -40,7 +38,6 @@
       createApp({
         data() {
           return {
-            token: localStorage.getItem('authToken') || '',
             forms: [],
             message: '',
             error: '',
@@ -64,17 +61,22 @@
             this.message = message || '';
           },
           async request(path, options = {}) {
-            if (!this.token) {
-              throw new Error('Please provide a bearer token.');
-            }
             const response = await fetch(path, {
               ...options,
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + this.token,
                 ...(options.headers || {})
               }
             });
+            if (response.redirected) {
+              const redirectedUrl = new URL(response.url, window.location.origin);
+              const isAuthRedirect = redirectedUrl.origin === window.location.origin
+                && redirectedUrl.pathname.startsWith('/auth/');
+              if (isAuthRedirect) {
+                window.location.assign(redirectedUrl.toString());
+                return null;
+              }
+            }
             if (!response.ok) {
               const payload = await response.json().catch(() => null);
               throw new Error(payload?.message || `Request failed (${response.status}): response body could not be parsed`);
@@ -88,13 +90,21 @@
             this.setError('');
             this.setMessage('');
             try {
-              localStorage.setItem('authToken', this.token);
               const payload = await this.request('/api/forms');
+              if (!payload) return;
               this.forms = payload.forms || [];
               this.setMessage(payload.message || '');
             } catch (error) {
               this.forms = [];
               this.setError(error.message);
+            }
+          },
+          async logout() {
+            try {
+              await this.request('/auth/logout', { method: 'POST' });
+              window.location.assign('/auth/login');
+            } catch (error) {
+              this.setError(error.message || 'Logout failed.');
             }
           },
           openCreate() {
@@ -185,20 +195,17 @@
           }
         },
         mounted() {
-          if (this.token) {
-            this.loadForms();
-          }
+          this.loadForms();
         },
         template: `
           <div class="card" v-if="view === 'list'">
             <div class="header">
               <h2>Available forms</h2>
-              <button @click="openCreate">Create new form</button>
-            </div>
-            <div class="token-row">
-              <label class="sr-only" for="auth-token">Auth token</label>
-              <input id="auth-token" v-model="token" type="password" placeholder="Auth token" />
-              <button class="secondary" @click="loadForms">Load forms</button>
+              <div class="actions">
+                <button class="secondary" @click="loadForms">Reload</button>
+                <button class="secondary" @click="logout">Logout</button>
+                <button @click="openCreate">Create new form</button>
+              </div>
             </div>
             <p class="meta" v-if="message">{{ message }}</p>
             <div class="error" v-if="error">{{ error }}</div>
