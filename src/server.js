@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 const { createApp } = require('./app');
 const { getConfig } = require('./config');
-const { fetchUserContext } = require('./pocketIdClient');
+const { createPocketIdAuth } = require('./pocketIdClient');
 const { FormsRepository } = require('./repository/formsRepository');
 
 async function start() {
@@ -12,14 +12,10 @@ async function start() {
 
   const repository = new FormsRepository(pool);
   await repository.init();
+  const auth = createPocketIdAuth(config);
 
   const app = createApp({
-    getUserContext: (token) =>
-      fetchUserContext({
-        baseUrl: config.pocketIdApiUrl,
-        token,
-        apiToken: config.pocketIdApiToken
-      }),
+    auth,
     repository
   });
 

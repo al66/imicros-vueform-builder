@@ -14,7 +14,7 @@ function resolveGroup(groupId, groups) {
   return groups.includes(groupId) ? groupId : null;
 }
 
-function createApp({ getUserContext, repository }) {
+function createApp({ auth, repository }) {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
   const indexPath = path.resolve(__dirname, '../public/index.html');
@@ -31,28 +31,38 @@ function createApp({ getUserContext, repository }) {
     res.json({ status: 'ok' });
   });
 
-  app.get('/', (_req, res, next) => {
+  app.get('/auth/login', async (req, res, next) => {
+    try {
+      await auth.login(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/auth/callback', async (req, res, next) => {
+    try {
+      await auth.callback(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/auth/logout', async (req, res, next) => {
+    try {
+      await auth.logout(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/', auth.requireAuth, (_req, res, next) => {
     if (!indexHtml) {
       return next(new Error(`UI file not found: ${indexPath}`));
     }
     return res.type('html').send(indexHtml);
   });
 
-  app.use('/api', async (req, res, next) => {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ message: 'Missing bearer token' });
-    }
-
-    try {
-      req.user = await getUserContext(token);
-      return next();
-    } catch (error) {
-      return res.status(401).json({ message: 'Authentication failed' });
-    }
-  });
+  app.use('/api', auth.requireAuth);
 
   app.get('/api/forms', async (req, res, next) => {
     try {

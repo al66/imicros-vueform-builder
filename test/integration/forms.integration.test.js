@@ -14,6 +14,15 @@ suite('integration with PostgreSQL', () => {
   let pool;
   let repository;
   let app;
+  const auth = {
+    requireAuth: (req, _res, next) => {
+      req.user = { userId: 'integration-user', groups: ['group-a', 'group-b'] };
+      next();
+    },
+    login: async (_req, res) => res.redirect('https://pocket-id.local/auth'),
+    callback: async (_req, res) => res.redirect('/'),
+    logout: async (_req, res) => res.status(204).send()
+  };
 
   beforeAll(async () => {
     const connectionString = process.env.DATABASE_URL
@@ -24,7 +33,7 @@ suite('integration with PostgreSQL', () => {
 
     app = createApp({
       repository,
-      getUserContext: async () => ({ userId: 'integration-user', groups: ['group-a', 'group-b'] })
+      auth
     });
   });
 
@@ -39,7 +48,6 @@ suite('integration with PostgreSQL', () => {
   test('creates, lists and versions forms with group isolation', async () => {
     const createA = await request(app)
       .post('/api/forms')
-      .set('Authorization', ['Bearer', 'test-token'].join(' '))
       .send({
         groupId: 'group-a',
         description: 'Form A',
@@ -54,7 +62,6 @@ suite('integration with PostgreSQL', () => {
 
     const update = await request(app)
       .put(`/api/forms/${createdId}`)
-      .set('Authorization', ['Bearer', 'test-token'].join(' '))
       .send({
         description: 'Form A updated',
         versionRemark: 'new field',
@@ -65,9 +72,7 @@ suite('integration with PostgreSQL', () => {
     expect(update.body.form.version).toBe(2);
     expect(update.body.form.versionRemark).toBe('new field');
 
-    const list = await request(app)
-      .get('/api/forms')
-      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+    const list = await request(app).get('/api/forms');
 
     expect(list.status).toBe(200);
     expect(list.body.forms).toHaveLength(1);
@@ -79,7 +84,6 @@ suite('integration with PostgreSQL', () => {
   test('deletes a form', async () => {
     const createA = await request(app)
       .post('/api/forms')
-      .set('Authorization', ['Bearer', 'test-token'].join(' '))
       .send({
         groupId: 'group-a',
         description: 'Form A',
@@ -89,15 +93,11 @@ suite('integration with PostgreSQL', () => {
 
     expect(createA.status).toBe(201);
 
-    const response = await request(app)
-      .delete(`/api/forms/${createA.body.form.id}`)
-      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+    const response = await request(app).delete(`/api/forms/${createA.body.form.id}`);
 
     expect(response.status).toBe(204);
 
-    const list = await request(app)
-      .get('/api/forms')
-      .set('Authorization', ['Bearer', 'test-token'].join(' '));
+    const list = await request(app).get('/api/forms');
 
     expect(list.status).toBe(200);
     expect(list.body.forms).toHaveLength(0);
