@@ -33,11 +33,20 @@
   <body>
     <div id="app" class="container"></div>
     <script>
+      window.__APP_BASE_PATH__ = '';
+    </script>
+    <script>
       const { createApp } = Vue;
+      const appBasePath = (() => {
+        const rawBasePath = typeof window.__APP_BASE_PATH__ === 'string' ? window.__APP_BASE_PATH__ : '';
+        if (!rawBasePath || rawBasePath === '/') return '';
+        return `/${rawBasePath.replace(/^\/+|\/+$/g, '')}`;
+      })();
 
       createApp({
         data() {
           return {
+            availableGroups: [],
             forms: [],
             message: '',
             error: '',
@@ -54,6 +63,9 @@
           };
         },
         methods: {
+          appPath(path) {
+            return `${appBasePath}${path.startsWith('/') ? path : `/${path}`}`;
+          },
           setError(message) {
             this.error = message || '';
           },
@@ -61,7 +73,7 @@
             this.message = message || '';
           },
           async request(path, options = {}) {
-            const response = await fetch(path, {
+            const response = await fetch(this.appPath(path), {
               ...options,
               headers: {
                 'Content-Type': 'application/json',
@@ -71,7 +83,7 @@
             if (response.redirected) {
               const redirectedUrl = new URL(response.url, window.location.origin);
               const isAuthRedirect = redirectedUrl.origin === window.location.origin
-                && redirectedUrl.pathname.startsWith('/auth/');
+                && redirectedUrl.pathname.startsWith(this.appPath('/auth/'));
               if (isAuthRedirect) {
                 window.location.assign(redirectedUrl.toString());
                 return null;
@@ -79,12 +91,45 @@
             }
             if (!response.ok) {
               const payload = await response.json().catch(() => null);
-              throw new Error(payload?.message || `Request failed (${response.status}): response body could not be parsed`);
+              const detail = payload?.message || response.statusText || 'Request failed';
+              throw new Error(`Request failed (${response.status}): ${detail}`);
             }
             if (response.status === 204) {
               return null;
             }
             return response.json();
+          },
+          applyGroups(groups) {
+            this.availableGroups = Array.isArray(groups) ? groups : [];
+            if (this.availableGroups.length === 1) {
+              this.groupId = this.availableGroups[0];
+              return;
+            }
+            if (!this.availableGroups.includes(this.groupId)) {
+              this.groupId = '';
+            }
+          },
+          async loadGroups() {
+            const payload = await this.request('/api/groups');
+            if (!payload) return;
+            this.applyGroups(payload.groups);
+          },
+          async loadInitialData() {
+            this.setError('');
+            this.setMessage('');
+            try {
+              const [groupsPayload, formsPayload] = await Promise.all([
+                this.request('/api/groups'),
+                this.request('/api/forms')
+              ]);
+              this.applyGroups(groupsPayload?.groups);
+              this.forms = formsPayload?.forms || [];
+              this.setMessage(formsPayload?.message || '');
+            } catch (error) {
+              this.forms = [];
+              this.availableGroups = [];
+              this.setError(error.message);
+            }
           },
           async loadForms() {
             this.setError('');
@@ -102,7 +147,7 @@
           async logout() {
             try {
               await this.request('/auth/logout', { method: 'POST' });
-              window.location.assign('/auth/login');
+              window.location.assign(this.appPath('/auth/login'));
             } catch (error) {
               this.setError(error.message || 'Logout failed.');
             }
@@ -111,7 +156,7 @@
             this.editorMode = 'create';
             this.editingId = null;
             this.description = '';
-            this.groupId = '';
+            this.groupId = this.availableGroups.length === 1 ? this.availableGroups[0] : '';
             this.editorVersion = 1;
             this.formJson = '{\n  "name": "new-form",\n  "elements": []\n}';
             this.view = 'builder';
@@ -146,8 +191,16 @@
               description: this.description,
               form
             };
-            if (this.editorMode === 'create' && this.groupId.trim()) {
-              payload.groupId = this.groupId.trim();
+            if (this.editorMode === 'create' && this.availableGroups.length > 1 && !this.groupId) {
+              this.setError('Please select a group.');
+              return;
+            }
+            if (this.editorMode === 'create' && this.groupId && !this.availableGroups.includes(this.groupId)) {
+              this.setError('Please select one of your available groups.');
+              return;
+            }
+            if (this.editorMode === 'create' && this.groupId) {
+              payload.groupId = this.groupId;
             }
             this.pendingPayload = payload;
             this.versionRemark = '';
@@ -195,7 +248,7 @@
           }
         },
         mounted() {
-          this.loadForms();
+          this.loadInitialData();
         },
         template: `
           <div class="card" v-if="view === 'list'">
@@ -246,8 +299,11 @@
               <input id="form-description" v-model="description" placeholder="Form description" />
             </div>
             <div class="field" v-if="editorMode === 'create'">
-              <label for="group-id">Group ID (required if you have multiple groups)</label>
-              <input id="group-id" v-model="groupId" placeholder="Group id" />
+              <label for="group-id">Group</label>
+              <select id="group-id" v-model="groupId" :disabled="!availableGroups.length">
+                <option value="" disabled>{{ availableGroups.length ? 'Select a group' : 'No groups available' }}</option>
+                <option v-for="group in availableGroups" :key="group" :value="group">{{ group }}</option>
+              </select>
             </div>
             <div class="field">
               <label for="form-json">Form JSON</label>

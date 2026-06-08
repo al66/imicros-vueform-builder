@@ -57,6 +57,7 @@ The application uses Pocket ID OIDC Authorization Code Flow:
 Users should open the root URL (for example, `https://dev.imicros.de/vueform-builder/`).
 The app restores authenticated state from secure HTTP-only session cookies and does not require manual bearer token input.
 The default session store is in-memory and should be replaced by a shared persistent store for multi-instance production deployments.
+When the app is served behind a reverse proxy on a sub-path, set `X-Forwarded-Prefix` so redirects and API calls keep that prefix.
 
 After login, the backend retrieves the user profile through:
 
@@ -65,6 +66,9 @@ After login, the backend retrieves the user profile through:
 using the access token obtained from the token endpoint.
 
 ### Form endpoints
+
+- `GET /api/groups`
+  List the authenticated user's Pocket ID groups for the UI group selector.
 
 - `GET /api/forms`  
   List forms available for the authenticated user's groups.
@@ -87,7 +91,7 @@ using the access token obtained from the token endpoint.
 ```
 
 `description`, `versionRemark`, and `form` are required.  
-`groupId` is required when the authenticated user belongs to more than one group.  
+`groupId` is selected from the authenticated user's Pocket ID groups. It is required when the authenticated user belongs to more than one group.  
 If the authenticated user belongs to exactly one group, `groupId` is optional and will be inferred automatically.
 For `PUT /api/forms/:id`, partial updates are not supported: provide all required fields (`description`, `versionRemark`, `form`) in every update request.
 

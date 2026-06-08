@@ -124,6 +124,57 @@ describe('pocket id oidc auth client', () => {
     expect(req.user.groups).toEqual(['group-1']);
   });
 
+  test('uses the callback path prefix for redirects', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          authorization_endpoint: 'https://issuer.example.com/oauth/authorize',
+          token_endpoint: 'https://issuer.example.com/oauth/token'
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'token-abc' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ sub: 'user-1', groups: ['group-1'] })
+      });
+
+    const auth = createPocketIdAuth({
+      ...config,
+      pocketIdCallbackUrl: 'https://app.example.com/vueform-builder/auth/callback'
+    });
+
+    const unauthenticatedReq = { headers: { cookie: '' }, method: 'GET' };
+    const unauthenticatedRes = createResponseMock();
+    const next = jest.fn();
+    auth.requireAuth(unauthenticatedReq, unauthenticatedRes, next);
+
+    expect(unauthenticatedRes.statusCode).toBe(302);
+    expect(unauthenticatedRes.location).toBe('/vueform-builder/auth/login');
+    expect(next).not.toHaveBeenCalled();
+
+    const loginReq = { headers: { cookie: '' }, method: 'GET', secure: true };
+    const loginRes = createResponseMock();
+    await auth.login(loginReq, loginRes);
+    const stateCookie = loginRes.getHeader('Set-Cookie')?.[0];
+    const stateValue = stateCookie.split(';')[0].split('=')[1];
+
+    const callbackReq = {
+      headers: { cookie: `vf_oidc_state=${stateValue}` },
+      query: { code: 'auth-code', state: stateValue },
+      method: 'GET',
+      secure: true
+    };
+    const callbackRes = createResponseMock();
+    await auth.callback(callbackReq, callbackRes);
+
+    expect(callbackRes.statusCode).toBe(302);
+    expect(callbackRes.location).toBe('/vueform-builder/');
+  });
+
   test('redirects unauthenticated GET requests', () => {
     const auth = createPocketIdAuth(config);
     const req = { headers: { cookie: '' }, method: 'GET' };
